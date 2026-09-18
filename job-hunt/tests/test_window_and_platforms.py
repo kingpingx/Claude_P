@@ -86,6 +86,23 @@ def test_days_window_still_works_on_dates_alone():
     assert not c.fresh_job(job(posted=outside))[0]
 
 
+def test_wellfound_listings_carry_the_time_they_went_live():
+    import json
+    import time
+    from jobbot.sources.wellfound import Wellfound
+
+    def listing(jid, secs_ago):
+        return {"id": jid, "title": "Software Engineer", "slug": "se", "liveStartAt": int(time.time() - secs_ago)}
+    data = {"props": {"pageProps": {"apolloState": {"data": {
+        "JobListingSearchResult:1": listing(1, 30 * 60),                  # half an hour ago
+        "JobListingSearchResult:2": listing(2, 2 * 365 * 24 * 3600),      # still live, 2 years on
+    }}}}}
+    html = '<script id="__NEXT_DATA__" type="application/json">' + json.dumps(data) + "</script>"
+    fresh, stale = sorted(Wellfound()._parse(html, "IN", "software-engineer"), key=lambda j: j.id)
+    assert fresh.posted_at and ctx(hours=1).fresh_job(fresh) == (True, "")
+    assert ctx(days=7).fresh_job(stale) == (False, "old"), "a 2-year-old listing is not from last week"
+
+
 def test_hours_wins_over_days_and_reaches_the_boards_as_seconds():
     c = ctx(days=30, hours=2)
     assert c.window_hours == 2 and c.recency_seconds == 7200

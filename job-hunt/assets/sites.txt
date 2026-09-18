@@ -19,7 +19,7 @@
 
 # ---- worldwide / multi-country
 linkedin       | on  | LinkedIn guest search. Exact times on fresh cards ("2 hours ago"); asks the board for the window itself
-wellfound      | on  | Wellfound (AngelList). Startups; no posting time published
+wellfound      | on  | Wellfound (AngelList). Startups; exact times (when the listing went live)
 themuse        | on  | The Muse. Exact times; city-based
 relocateme     | on  | Relocate.me. Roles that pay to move you; no posting time
 jsearch        | on  | JSearch (Google Jobs) - needs RAPIDAPI_KEY. Exact times

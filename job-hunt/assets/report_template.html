@@ -132,7 +132,9 @@
   <select id="remote"><option value="any">Remote: any</option><option value="only">Remote only</option><option value="no">On-site / hybrid only</option></select>
   <select id="sort"></select>
   <select id="srcSel"><option value="">All sources</option></select>
+  <select id="age" title="Posted within - applies to every source"></select>
   <span class="chips">
+    <button class="chip" id="undated" title="Postings whose board gave no exact time (Instahyre, XING, TokyoDev...)">+ No-time postings</button>
     <button class="chip" id="onlySaved">★ Saved</button>
     <button class="chip" id="hideApplied">Hide applied</button>
     <button class="chip" id="showHidden">Show removed</button>
@@ -166,7 +168,7 @@
   const S = Object.assign({ applied: {}, saved: {}, hidden: {} }, load(STATE_KEY, {}));
   const ui = Object.assign({
     country: 'ALL', q: '', minScore: 0, fits: ['fit', 'stretch', 'unknown', 'over'], remote: 'any',
-    sort: SCORED ? 'score' : 'fit', src: '', onlySaved: false, hideApplied: false, showHidden: false, titleOnly: false,
+    sort: SCORED ? 'score' : 'fit', src: '', age: 0, undated: null, onlySaved: false, hideApplied: false, showHidden: false, titleOnly: false,
   }, load(UI_KEY, {}));
   const $ = id => document.getElementById(id);
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -224,6 +226,23 @@
   const srcNames = [...new Set(JOBS.map(j => j.source_name))].sort();
   $('srcSel').innerHTML = '<option value="">All sources</option>' + srcNames.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
 
+  // posted within, for every source - job_bot's fresh_job(): the exact time decides when the
+  // board gave one, a date only for a day or more. Postings with neither have their own
+  // switch, on by default for a day or more, as in the search itself.
+  const AGES = [[0, 'Posted: any time'], [1, 'Last 1 h'], [4, 'Last 4 h'], [6, 'Last 6 h'], [12, 'Last 12 h'], [24, 'Last day'], [48, 'Last 2 days'], [168, 'Last week']];
+  $('age').innerHTML = AGES.map(([h, l]) => `<option value="${h}">${l}</option>`).join('');
+  const utcDay = s => /^\d{4}-\d{2}-\d{2}/.test(s || '') ? Date.parse(String(s).slice(0, 10) + 'T00:00:00Z') : NaN;
+  function winFit(j, h) {  // '' inside, 'old' outside, 'undated' cannot tell
+    const at = j.posted_at ? new Date(j.posted_at).getTime() : NaN;
+    if (isFinite(at)) return (Date.now() - at) / 3600000 <= h + 0.01 ? '' : 'old';
+    const day = utcDay(j.posted);
+    if (!isFinite(day)) return 'undated';
+    const d = Math.round((utcDay(new Date().toISOString()) - day) / 86400000);
+    if (h >= 24) return d <= h / 24 ? '' : 'old';
+    return d > 0 ? 'old' : 'undated';
+  }
+  const keepUndated = h => ui.undated == null ? h >= 24 : ui.undated;
+
   // tabs
   function renderTabs(counts) {
     const tabs = [{ code: 'ALL', name: 'All', flag: '' }].concat(COUNTRIES);
@@ -232,14 +251,16 @@
   $('tabs').onclick = e => { const b = e.target.closest('[data-cc]'); if (!b) return; ui.country = b.dataset.cc; persist(); render(); window.scrollTo({ top: 0 }); };
 
   // controls wiring
-  $('q').value = ui.q; $('minScore').value = ui.minScore; $('minScoreV').textContent = ui.minScore; $('remote').value = ui.remote; $('sort').value = ui.sort; $('srcSel').value = ui.src;
+  $('q').value = ui.q; $('minScore').value = ui.minScore; $('minScoreV').textContent = ui.minScore; $('remote').value = ui.remote; $('sort').value = ui.sort; $('srcSel').value = ui.src; $('age').value = ui.age;
   $('q').oninput = () => { ui.q = $('q').value; persist(); render(); };
   $('minScore').oninput = () => { ui.minScore = +$('minScore').value; $('minScoreV').textContent = ui.minScore; persist(); render(); };
   $('remote').onchange = () => { ui.remote = $('remote').value; persist(); render(); };
   $('sort').onchange = () => { ui.sort = $('sort').value; persist(); render(); };
   $('srcSel').onchange = () => { ui.src = $('srcSel').value; persist(); render(); };
+  $('age').onchange = () => { ui.age = +$('age').value; persist(); render(); };
+  $('undated').onclick = () => { ui.undated = !keepUndated(ui.age); persist(); render(); };
   ['onlySaved', 'hideApplied', 'showHidden', 'titleOnly'].forEach(k => { $(k).onclick = () => { ui[k] = !ui[k]; persist(); render(); }; });
-  $('reset').onclick = () => { Object.assign(ui, { q: '', minScore: 0, fits: ['fit', 'stretch', 'unknown', 'over'], remote: 'any', src: '', onlySaved: false, hideApplied: false, showHidden: false, titleOnly: false }); $('q').value = ''; $('minScore').value = 0; $('minScoreV').textContent = 0; $('remote').value = 'any'; $('srcSel').value = ''; persist(); render(); };
+  $('reset').onclick = () => { Object.assign(ui, { q: '', minScore: 0, fits: ['fit', 'stretch', 'unknown', 'over'], remote: 'any', src: '', age: 0, undated: null, onlySaved: false, hideApplied: false, showHidden: false, titleOnly: false }); $('q').value = ''; $('minScore').value = 0; $('minScoreV').textContent = 0; $('remote').value = 'any'; $('srcSel').value = ''; $('age').value = 0; persist(); render(); };
   $('csv').onclick = () => {
     const rows = [['country', 'title', 'company', 'location', 'source', 'posted', 'salary', 'fit', 'exp_min', 'exp_max', 'score', 'matched_skills', 'missing_skills', 'url', 'applied', 'saved']];
     visible().forEach(j => rows.push([j.country, j.title, j.company, j.location, j.source_name, j.posted || '', j.salary, j.fit, j.exp_min ?? '', j.exp_max ?? '', j.score ?? '', (j.matched_skills || []).join('; '), (j.missing_skills || []).join('; '), j.url, S.applied[j.id] ? 'yes' : '', S.saved[j.id] ? 'yes' : '']));
@@ -259,6 +280,7 @@
     if (ui.remote === 'only' && !j.remote) return false;
     if (ui.remote === 'no' && j.remote === true) return false;
     if (ui.src && j.source_name !== ui.src) return false;
+    if (ui.age) { const f = winFit(j, ui.age); if (f === 'old' || (f === 'undated' && !keepUndated(ui.age))) return false; }
     if (ui.titleOnly && !(j.relevance >= 0.75)) return false;
     if (ui.q) {
       const q = ui.q.toLowerCase();
@@ -271,7 +293,7 @@
   function sorter(a, b) {
     switch (ui.sort) {
       case 'score': return (b.score ?? -1) - (a.score ?? -1) || (FIT_RANK[a.fit] - FIT_RANK[b.fit]) || (b.posted || '').localeCompare(a.posted || '');
-      case 'date': return (b.posted || '').localeCompare(a.posted || '') || (b.score ?? -1) - (a.score ?? -1);
+      case 'date': return (b.posted_at || b.posted || '').localeCompare(a.posted_at || a.posted || '') || (b.score ?? -1) - (a.score ?? -1);
       case 'fit': return (FIT_RANK[a.fit] - FIT_RANK[b.fit]) || (b.score ?? -1) - (a.score ?? -1) || (b.relevance - a.relevance) || (b.posted || '').localeCompare(a.posted || '');
       case 'relevance': return (b.relevance - a.relevance) || (b.score ?? -1) - (a.score ?? -1);
       case 'company': return (a.company || '').localeCompare(b.company || '') || (b.score ?? -1) - (a.score ?? -1);
@@ -281,9 +303,14 @@
   function visible() { return JOBS.filter(j => passes(j, false)).sort(sorter); }
 
   // rendering
-  function ago(iso) {
-    if (!iso) return '';
-    const d = Math.round((Date.now() - new Date(iso + 'T00:00:00Z').getTime()) / 86400000);
+  function ago(j) {  // minutes / hours only when the board said the time
+    const at = j.posted_at ? new Date(j.posted_at).getTime() : NaN;
+    if (isFinite(at) && Date.now() - at < 86400000) {
+      const m = Math.max(0, Math.round((Date.now() - at) / 60000));
+      return m < 60 ? m + ' min ago' : Math.round(m / 60) + ' h ago';
+    }
+    if (!j.posted) return '';
+    const d = Math.round((Date.now() - new Date(j.posted + 'T00:00:00Z').getTime()) / 86400000);
     if (d <= 0) return 'today'; if (d === 1) return 'yesterday'; if (d < 30) return d + 'd ago'; return Math.round(d / 30) + 'mo ago';
   }
   function ring(score, conf) {
@@ -312,7 +339,7 @@
     return `<article class="card ${applied ? 'applied' : ''} ${saved ? 'saved' : ''} ${hidden ? 'hidden-job' : ''}" data-id="${j.id}">
       <div class="head">${ring(j.score, j.extra && j.extra.score_confidence)}<div style="flex:1;min-width:0">
         <div class="title"><a href="${esc(j.url)}" target="_blank" rel="noopener">${esc(j.title)}</a></div>
-        <div class="sub"><b>${esc(j.company || '—')}</b>${j.location ? ' · ' + esc(j.location) : ''}${ui.country === 'ALL' && country ? ' · ' + country.flag : ''}${j.posted ? ' · ' + ago(j.posted) : ''}${j.salary ? ' · ' + esc(j.salary) : ''}${j.employment_type ? ' · ' + esc(j.employment_type) : ''}</div>
+        <div class="sub"><b>${esc(j.company || '—')}</b>${j.location ? ' · ' + esc(j.location) : ''}${ui.country === 'ALL' && country ? ' · ' + country.flag : ''}${j.posted ? ' · ' + ago(j) : ''}${j.salary ? ' · ' + esc(j.salary) : ''}${j.employment_type ? ' · ' + esc(j.employment_type) : ''}</div>
       </div></div>
       <div class="badges"><span class="b src">${esc(j.source_name)}</span>${(j.also_on || []).map(a => `<span class="b">also on ${esc(a)}</span>`).join('')}<span class="b fit-${j.fit}">${FIT_LABEL[j.fit] || j.fit}</span>${expLabel(j) ? `<span class="b">${esc(expLabel(j))}</span>` : ''}${j.remote ? '<span class="b remote">remote</span>' : ''}${eligible}${j.extra && j.extra.relocation_paid ? '<span class="b remote">relocation paid</span>' : ''}${j.extra && j.extra.applied_status === 'applied' ? '<span class="b fit-fit" title="' + esc(j.extra.applied_note || '') + '">Applied by agent</span>' : ''}${j.extra && j.extra.applied_status === 'questionnaire' ? '<span class="b fit-stretch" title="' + esc(j.extra.applied_note || '') + '">Needs your answer</span>' : ''}${j.extra && j.extra.applied_status === 'would-apply' ? '<span class="b fit-fit">Would apply</span>' : ''}${j.extra && j.extra.applied_status === 'offsite' ? '<span class="b">Apply on company site</span>' : ''}${j.extra && j.extra.japanese_level ? `<span class="b">JP: ${esc(j.extra.japanese_level)}</span>` : ''}</div>
       ${skills ? `<div class="skills">${skills}</div>` : ''}
@@ -328,6 +355,8 @@
   function render() {
     renderFitChips();
     ['onlySaved', 'hideApplied', 'showHidden', 'titleOnly'].forEach(k => $(k).classList.toggle('on', !!ui[k]));
+    $('undated').style.display = ui.age ? '' : 'none';
+    $('undated').classList.toggle('on', !!ui.age && keepUndated(ui.age));
     const counts = { ALL: 0 };
     JOBS.forEach(j => { if (passes(j, true)) { counts.ALL++; counts[j.country] = (counts[j.country] || 0) + 1; } });
     renderTabs(counts);

@@ -21,7 +21,7 @@ on:
         required: false
         default: "IN,DE,NL,ES,FI,AU,JP,TH"
       days:
-        description: "Only jobs posted in the last N days"
+        description: "Only jobs posted in the last N days (0 = any age)"
         required: false
         default: "14"
       hours:

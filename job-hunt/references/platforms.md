@@ -13,7 +13,7 @@ How each source is fetched, what it covers, and where it tends to break. Adapter
 | duunitori | Duunitori | FI | JSON `api/v1/jobentries?search=` | Search is AND per word, bot also queries single strong terms. |
 | tecnoempleo | Tecnoempleo | ES | HTML listing `ofertas-trabajo/?te=`, `div.p-3.border.rounded` cards | IT-only board, dates dd/mm/yyyy. |
 | infojobs | InfoJobs | ES | HTML results, only ~5 cards server-rendered per page | Paginated to compensate. May show a bot check occasionally. |
-| wellfound | Wellfound | all | `/role/l/<role-slug>/<country-slug>` pages, jobs in `__NEXT_DATA__` apolloState | Unknown role slugs redirect to a generic location page, so there's a `software-engineer` fallback plus relevance filter. |
+| wellfound | Wellfound | all | `/role/l/<role-slug>/<country-slug>` pages, jobs in `__NEXT_DATA__` apolloState | Unknown role slugs redirect to a generic location page, so there's a `software-engineer` fallback plus relevance filter. Posting time = `liveStartAt` (epoch); listings stay live for years, so the window matters here. |
 | tokyodev | TokyoDev | JP | HTML `/jobs` grouped by company (no search) | English-speaking roles. Tags include salary and "No Japanese required". |
 | japandev | Japan Dev | JP | HTML `/jobs?page=N`, `li.job-item` | Shows Japanese-level tags. |
 | daijob | Daijob | JP | HTML `en/jobs/search_result?keywords=`, `article.job-card` | Bilingual jobs, includes Japanese level. |
@@ -22,7 +22,7 @@ How each source is fetched, what it covers, and where it tends to break. Adapter
 | themuse | The Muse | all (city lists in config) | JSON `api/public/jobs?location=` (no keyword search) | Mostly large companies. |
 | landingjobs | Landing.jobs | EU | JSON `api/v1/jobs?q=` | Country from `locations[].country_code`, shows relocation flag. |
 | relocateme | Relocate.me | all | HTML `/international-jobs?page=N`, country from URL path | Jobs with relocation support. |
-| instahyre | Instahyre | IN | JSON `api/v1/job_search?q=` | Only used when India is requested. |
+| instahyre | Instahyre | IN | JSON `api/v1/job_search?q=` | Only used when India is requested. Publishes no posting time (not in the search API, the job API or the job page), so a window under a day leaves it out unless undated postings are allowed. |
 | remotive, remoteok, jobicy, workingnomads | Remote boards | Remote tab | JSON feeds | `remote_util.assign_country` maps "Europe", "APAC", "Worldwide", city names to the user's countries, and drops US-only jobs. Jobicy's `geo` param is ignored server-side, so location filtering is client-side. |
 
 ## Keyed sources (enabled when env vars exist)

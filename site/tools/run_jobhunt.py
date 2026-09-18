@@ -4,7 +4,7 @@ Inputs come from the environment (set by .github/workflows/jobhunt.yml):
     INPUT_ROLE        "python developer, backend engineer"   (comma-separated, required)
     INPUT_EXPERIENCE  "3" or "2-4"                            (optional)
     INPUT_COUNTRIES   "DE,NL,India"                           (optional; bot default when empty)
-    INPUT_DAYS        "14"                                    (optional)
+    INPUT_DAYS        "14"                                    (optional; "0" = any age)
     INPUT_HOURS       "2" or "0.5"                            (optional; wins over INPUT_DAYS)
     INPUT_ALLOW_UNDATED "true"                                (optional; with INPUT_HOURS, keep postings
                                                                whose exact time the board never stated)

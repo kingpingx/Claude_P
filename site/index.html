@@ -149,6 +149,7 @@
   /* "Posted within": a number and its unit side by side */
   .win { display: grid; grid-template-columns: minmax(0, 1fr) 104px; gap: 8px; }
   .win select { padding-right: 30px; }
+  .win input:disabled { opacity: .45; }
   .spin { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--line); border-top-color: var(--accent);
     border-radius: 50%; animation: s 1s linear infinite; vertical-align: -2px; }
   @keyframes s { to { transform: rotate(360deg); } }
@@ -357,7 +358,7 @@
           <div><label>Posted within <span class="muted" id="f-win-sum"></span></label>
             <div class="win">
               <input id="f-win-n" value="7" inputmode="decimal" aria-label="Posted within, how many">
-              <select id="f-win-u" aria-label="hours or days"><option value="h">hours</option><option value="d" selected>days</option></select>
+              <select id="f-win-u" aria-label="hours, days or any age"><option value="h">hours</option><option value="d" selected>days</option><option value="all">any age</option></select>
             </div>
           </div>
         </div>
@@ -1058,7 +1059,7 @@
     if (q) t.push(stChip(q.status, q.note));
     var h = '<div class="card dt"><div class="dhead"><div class="t"><h3>' + esc(j.title || "(no title)") + '</h3><div class="sub muted">' +
       esc(j.company || "") + (j.location || j.country ? " · " + (flag(j.country) ? flag(j.country) + " " : "") + esc(j.location || "location not stated") : "") +
-      (j.posted ? " · " + esc(ago(j.posted)) : "") + "</div></div>" +
+      (postedText(j) ? " · " + esc(postedText(j)) : "") + "</div></div>" +
       '<button class="icon-btn" data-dclose="1" title="Close (Esc)" aria-label="Close">✕</button></div>' +
       '<div class="tags" style="display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 4px">' + t.join("") + "</div>" +
       (j.url ? '<div style="margin-top:8px">' + openLink(j.url, "Open the posting ↗", "ghost small", j._key || "") + "</div>" : "");
@@ -1109,6 +1110,31 @@
     ["jsearch", "JSearch (Google Jobs)", "jsearch"], ["careers", "Company career pages", "greenhouse lever ashby smartrecruiters recruitee workday careers"]];
   var BOARD_OF = {}; BOARDS.forEach(function (b) { b[2].split(" ").forEach(function (k) { BOARD_OF[k] = b[0]; }); });
   function srcKey(j) { var s = String(j.source || "").toLowerCase(); return BOARD_OF[s] || s || "other"; }
+  // "Posted within" on a report, for every board: job_bot's fresh_job() in the browser. The
+  // exact time decides when the board gave one; a date settles it only for a day or more.
+  // A posting that shows neither is "undated" (Instahyre, XING, TokyoDev... publish no time)
+  // and has its own switch, on by default for a day or more - as in the search itself.
+  var JWIN = [[0, "All"], [1, "1 h"], [4, "4 h"], [6, "6 h"], [12, "12 h"], [24, "1 day"], [48, "2 days"], [168, "1 week"]];
+  function winName(h) { return (JWIN.filter(function (w) { return w[0] === h; })[0] || [h, h + " h"])[1]; }
+  function utcDay(s) { return /^\d{4}-\d{2}-\d{2}/.test(s || "") ? Date.parse(String(s).slice(0, 10) + "T00:00:00Z") : NaN; }
+  function winFit(j, h) {  // "" inside, "old" outside, "undated" cannot tell
+    if (!h) return "";
+    var at = j.posted_at ? new Date(j.posted_at).getTime() : NaN;
+    if (isFinite(at)) return (Date.now() - at) / 3600000 <= h + 0.01 ? "" : "old";
+    var day = utcDay(j.posted);
+    if (!isFinite(day)) return "undated";
+    var d = Math.round((utcDay(new Date().toISOString()) - day) / 86400000);
+    if (h >= 24) return d <= h / 24 ? "" : "old";
+    return d > 0 ? "old" : "undated";
+  }
+  function keepUndated(h) { return JV.undated == null ? h >= 24 : JV.undated; }
+  function inWindow(j, h) { var f = winFit(j, h); return f === "" || (f === "undated" && keepUndated(h)); }
+  // when it went up: "3 h ago" only when the board said the time, else just the date
+  function postedText(j) {
+    if (j.posted_at) return ago(j.posted_at);
+    var day = utcDay(j.posted);
+    return isFinite(day) ? new Date(day).toLocaleDateString(undefined, { day: "numeric", month: "short", timeZone: "UTC" }) : "";
+  }
   // Countries you search (Search tab): India first, then job_bot's DEFAULT_COUNTRIES, then Remote.
   var CC_CORE = ["IN", "DE", "NL", "ES", "FI", "AU", "JP", "TH"];
   function ccLabel(c) { return c === "??" ? "not stated" : (c === "REMOTE" ? "Remote" : (NAMES[c] || c)); }
@@ -1123,7 +1149,7 @@
     $("v-report").addEventListener("click", function () { openReport(item); });
     Promise.all([fetchEnc(item.meta.jobs_file, { cache: "force-cache" }).then(JSON.parse), loadQueue(true)]).then(function (res) {
       var jobs = (res[0] || []).map(function (j) { var k = jobKey(j); j._key = k.key; j._board = k.board; j._src = srcKey(j); return j; });
-      JV = { item: item, jobs: jobs, boards: {}, countries: {}, min: 0, sel: {}, open: {}, limit: 50, sort: "score", showRemoved: false, detail: null, tsort: null };
+      JV = { item: item, jobs: jobs, boards: {}, countries: {}, min: 0, win: 0, undated: null, sel: {}, open: {}, limit: 50, sort: "score", showRemoved: false, detail: null, tsort: null };
       renderJobs();
       $("j-box").scrollTop = 0;
       // the detail column shows the form the PC filled in; that lives in profile.enc
@@ -1149,6 +1175,7 @@
       if (onKeys(JV.boards).length && !JV.boards[j._src]) return false;
       if (onKeys(JV.countries).length && !JV.countries[j.country || "??"]) return false;
       if (JV.min && !((j.score || 0) >= JV.min)) return false;
+      if (JV.win && !inWindow(j, JV.win)) return false;
       return true;
     }).sort(function (a, b) {
       if (JV.tsort) {  // a column heading was clicked: that wins over the Sort box
@@ -1156,7 +1183,7 @@
         if (va < vb) return -JV.tsort.dir;
         if (va > vb) return JV.tsort.dir;
       }
-      return JV.sort === "new" ? String(b.posted || "").localeCompare(String(a.posted || "")) : (b.score || 0) - (a.score || 0);
+      return JV.sort === "new" ? String(b.posted_at || b.posted || "").localeCompare(String(a.posted_at || a.posted || "")) : (b.score || 0) - (a.score || 0);
     });
   }
   function sortVal(k, j, keys) {
@@ -1190,8 +1217,13 @@
     Object.keys(cc).sort(function (a, b) { return cc[b] - cc[a]; }).forEach(function (c) { if (c !== "??") addCc(c); }); if (cc["??"]) addCc("??");
     var fb = onKeys(JV.boards), fc = onKeys(JV.countries), off = ((queue || {}).settings || {}).offsite || "career";
     var labelOf = function (list, k) { return (list.filter(function (b) { return b[0] === k; })[0] || [k, k])[1]; };
+    // what each "posted within" chip would show, and which boards gave no time for the rest
+    var base = JV.jobs.filter(function (j) { return j.fit !== "no"; }), wc = {}, noTime = {}, nNoTime = 0;
+    JWIN.forEach(function (w) { wc[w[0]] = base.filter(function (j) { return !w[0] || inWindow(j, w[0]); }).length; });
+    if (JV.win) base.forEach(function (j) { if (winFit(j, JV.win) === "undated") { nNoTime++; noTime[j.source_name || j.source || "?"] = 1; } });
     var fsum = [fb.length === 0 ? "All boards" : fb.length === 1 ? labelOf(boards, fb[0]) : fb.length + " boards",
       fc.length === 0 ? "All countries" : fc.length === 1 ? ccLabel(fc[0]) : fc.length + " countries",
+      JV.win ? "posted within " + winName(JV.win) : "any time",
       JV.min ? "match ≥" + JV.min + "%" : "any match", JV.sort === "new" ? "newest first" : "best match first"].join(" · ");
     var fchip = function (attr, k, label, n, on) { return '<button type="button" data-' + attr + '="' + esc(k) + '" class="' + (on ? "on" : "") + (n ? "" : " zero") + '">' + label + " · " + n + "</button>"; };
     var jm = JV.item.meta || {}, jwin = windowLabel(jm);
@@ -1208,9 +1240,13 @@
         boards.map(function (b) { return fchip("b", b[0], esc(b[1]), bc[b[0]] || 0, JV.boards[b[0]]); }).join("") + "</div>" +
       '<label>Countries <span class="muted">(India first; tap several)</span></label><div class="chips small" id="jf-cc"><button type="button" data-cc=""' + (fc.length ? "" : ' class="on"') + ">All countries</button>" +
         ccs.map(function (c) { return fchip("cc", c, (flag(c) ? flag(c) + " " : "") + esc(ccLabel(c)), cc[c] || 0, JV.countries[c]); }).join("") + "</div>" +
+      '<label>Posted within <span class="muted">(every board)</span></label><div class="chips small" id="jf-win">' +
+        JWIN.map(function (w) { return fchip("win", w[0], esc(w[1]), wc[w[0]], JV.win === w[0]); }).join("") + "</div>" +
+      (nNoTime ? '<label class="check"><input type="checkbox" id="jf-undated"' + (keepUndated(JV.win) ? " checked" : "") + "><span>Also show " + nNoTime +
+        ' with no exact posting time <span class="muted">(' + esc(Object.keys(noTime).join(", ")) + ")</span></span></label>" : "") +
       '<div class="row"><div><label>Resume match</label><select id="jf-min">' + [0, 35, 50, 60, 65, 80].map(function (v) { return '<option value="' + v + '"' + (JV.min === v ? " selected" : "") + ">" + (v ? v + "%+" : "any") + "</option>"; }).join("") + "</select></div>" +
       '<div><label>Sort</label><select id="jf-sort"><option value="score"' + (JV.sort === "score" ? " selected" : "") + '>best match</option><option value="new"' + (JV.sort === "new" ? " selected" : "") + ">newest</option></select></div></div>" +
-      (fb.length || fc.length || JV.min ? '<button type="button" class="ghost small" id="jf-clear" style="margin-top:12px">Clear filters</button>' : ""));
+      (fb.length || fc.length || JV.min || JV.win ? '<button type="button" class="ghost small" id="jf-clear" style="margin-top:12px">Clear filters</button>' : ""));
     // the list itself: a table at >=1100px, the cards below that. The detail of the
     // selected posting is the second column (wide) or an accordion under its card.
     var shown = todo.slice(0, JV.limit), body = "";
@@ -1230,9 +1266,9 @@
     h += '<div class="jsplit' + (wide() && det ? " open" : "") + '"><div class="jmain">' + body + "</div>" +
       (wide() && det ? '<aside class="jdetail">' + detailHtml(det, keys[det._key]) + "</aside>" : "") + "</div>";
     // keep the filter panel's own scroll (and sideways chip-row scroll) across the re-render
-    var keep = ["#jf .fbody", "#jf-board", "#jf-cc"].map(function (s) { var el = box.querySelector(s); return el ? [el.scrollTop, el.scrollLeft] : [0, 0]; });
+    var keep = ["#jf .fbody", "#jf-board", "#jf-cc", "#jf-win"].map(function (s) { var el = box.querySelector(s); return el ? [el.scrollTop, el.scrollLeft] : [0, 0]; });
     box.innerHTML = h; box.scrollTop = top;
-    ["#jf .fbody", "#jf-board", "#jf-cc"].forEach(function (s, i) { var el = box.querySelector(s); if (el) { el.scrollTop = keep[i][0]; el.scrollLeft = keep[i][1]; } });
+    ["#jf .fbody", "#jf-board", "#jf-cc", "#jf-win"].forEach(function (s, i) { var el = box.querySelector(s); if (el) { el.scrollTop = keep[i][0]; el.scrollLeft = keep[i][1]; } });
     bindMarks(box, function (toggle) { if (toggle === true) JV.showRemoved = !JV.showRemoved; renderJobs(); });
     bindAcc(box);
     $("jq-all").addEventListener("click", function () { queueJobs(notQueued); });
@@ -1240,7 +1276,9 @@
     var toggleIn = function (set, k) { if (!k) Object.keys(set).forEach(function (x) { delete set[x]; }); else if (set[k]) delete set[k]; else set[k] = 1; JV.limit = 50; renderJobs(); };
     $("jf-board").addEventListener("click", function (e) { var b = e.target.closest("button[data-b]"); if (b) toggleIn(JV.boards, b.dataset.b); });
     $("jf-cc").addEventListener("click", function (e) { var b = e.target.closest("button[data-cc]"); if (b) toggleIn(JV.countries, b.dataset.cc); });
-    if ($("jf-clear")) $("jf-clear").addEventListener("click", function () { JV.boards = {}; JV.countries = {}; JV.min = 0; JV.limit = 50; renderJobs(); });
+    $("jf-win").addEventListener("click", function (e) { var b = e.target.closest("button[data-win]"); if (b) { JV.win = +b.dataset.win; JV.limit = 50; renderJobs(); } });
+    if ($("jf-undated")) $("jf-undated").addEventListener("change", function (e) { JV.undated = e.target.checked; JV.limit = 50; renderJobs(); });
+    if ($("jf-clear")) $("jf-clear").addEventListener("click", function () { JV.boards = {}; JV.countries = {}; JV.min = 0; JV.win = 0; JV.undated = null; JV.limit = 50; renderJobs(); });
     $("jf-min").addEventListener("change", function (e) { JV.min = +e.target.value; renderJobs(); });
     $("jf-sort").addEventListener("change", function (e) { JV.sort = e.target.value; renderJobs(); });
     if ($("jf-more")) $("jf-more").addEventListener("click", function () { JV.limit += 50; renderJobs(); });
@@ -1310,7 +1348,7 @@
       "<td>" + esc(j.company || "") + "</td>" +
       '<td class="pos">' + openLink(j.url, j.title || "(no title)", "", j._key) + "</td>" +
       '<td class="dim">' + (flag(j.country) ? flag(j.country) + " " : "") + esc(j.location || "") + "</td>" +
-      '<td class="dim when">' + esc(j.posted ? ago(j.posted) : "") + "</td>" +
+      '<td class="dim when">' + esc(postedText(j)) + "</td>" +
       '<td class="dim"><div class="clip">' + esc((j.matched_skills || []).join(", ")) + "</div></td>" +
       '<td class="dim"><div class="clip">' + esc((j.missing_skills || []).join(", ")) + "</div></td>" +
       '<td class="dim"><div class="clip">' + esc(why) + "</div></td>" +
@@ -1328,7 +1366,7 @@
     var btn = q ? '<button class="btn done" disabled>' + (STATUS[q.status] || [0, q.status])[1] + "</button>" : (applied ? "" : '<button class="btn" data-q1="' + esc(j._key) + '">+ Queue</button>');
     if (applied && !q) qchip = chip("ok", "✓ applied");
     return '<div class="job' + (applied ? " applied" : "") + (marks.removed[j._key] ? " removed" : "") + (JV.detail === j._key ? " sel" : "") + '" data-job="' + esc(j._key) + '"><div class="head">' + (q || applied ? "" : '<input type="checkbox" class="box" data-sel="' + esc(j._key) + '"' + (JV.sel[j._key] ? " checked" : "") + ' style="margin-top:2px" title="select">') +
-      '<div style="flex:1;min-width:0"><h3>' + esc(j.title) + '</h3><div class="sub">' + esc(j.company) + " · " + (flag(j.country) ? flag(j.country) + " " : "") + esc(j.location || "location not stated") + (j.posted ? " · " + esc(ago(j.posted)) : "") + "</div></div>" + qchip + "</div>" +
+      '<div style="flex:1;min-width:0"><h3>' + esc(j.title) + '</h3><div class="sub">' + esc(j.company) + " · " + (flag(j.country) ? flag(j.country) + " " : "") + esc(j.location || "location not stated") + (postedText(j) ? " · " + esc(postedText(j)) : "") + "</div></div>" + qchip + "</div>" +
       '<div class="tags">' + t.join("") + "</div>" +
       (j.matched_skills && j.matched_skills.length ? '<div class="hint">✓ ' + esc(j.matched_skills.slice(0, 8).join(", ")) + "</div>" : "") +
       '<div class="acts">' + openLink(j.url, "Open", "btn2", j._key) + '<a href="#" class="btn2" data-contacts="' + esc(j._key) + '">' + (JV.open[j._key] ? "Hide contacts" : (hasC ? "Contacts ✓" : "Contacts")) + "</a>" + btn + (q ? markBtns(j._key, false) : markBtns(j._key, applied)) + "</div>" +
@@ -1364,7 +1402,7 @@
     if (!jobs.length) return;
     var keys = jobs.map(function (j) { return j._key; });
     // the PC expands "all" / keys from the report's own job list, so the payload stays small
-    var all = jobsFiltered().length === jobs.length && !onKeys(JV.boards).length && !onKeys(JV.countries).length && !JV.min && jobs.length === JV.jobs.filter(function (j) { return j.fit !== "no"; }).length;
+    var all = jobsFiltered().length === jobs.length && !onKeys(JV.boards).length && !onKeys(JV.countries).length && !JV.min && !JV.win && jobs.length === JV.jobs.filter(function (j) { return j.fit !== "no"; }).length;
     var payload = { report: JV.item.id, kind: JV.item.kind, jobs: all ? "all" : keys.map(function (k) { return k.indexOf("web:") === 0 ? null : k; }).filter(Boolean) };
     var webJobs = jobs.filter(function (j) { return j._board === "web"; });
     if (!all && webJobs.length) payload.items = webJobs.map(function (j) { return { url: j.url, title: j.title, company: j.company, location: j.location, score: j.score, source: j.source, extra: { company_site: (j.extra || {}).company_site } }; });
@@ -1595,28 +1633,33 @@
   $("f-remote").checked = store.get("f.remote", "1") === "1";
   $("f-remote").addEventListener("change", function () { store.set("f.remote", $("f-remote").checked ? "1" : ""); });
 
-  // ---- Search: "posted within" (a number + hours / days). Default 7 days.
+  // ---- Search: "posted within" (a number + hours / days, or any age). Default 7 days.
   // Under a day job_bot drops postings the board gave no time for, so the window stays
-  // honest; the switch below maps to --allow-undated.
-  var WIN_QUICK = [["2", "h"], ["6", "h"], ["12", "h"], ["24", "h"], ["3", "d"], ["7", "d"], ["14", "d"], ["30", "d"]];
+  // honest; the switch below maps to --allow-undated. "All" sends days=0 (no limit).
+  var WIN_QUICK = [["1", "h", "1 h"], ["4", "h", "4 h"], ["6", "h", "6 h"], ["12", "h", "12 h"],
+                   ["1", "d", "1 day"], ["2", "d", "2 days"], ["7", "d", "1 week"], ["", "all", "All"]];
   function num(v) { var n = parseFloat(String(v == null ? "" : v).replace(",", ".")); return isFinite(n) && n > 0 ? n : 0; }
   function trimNum(n) { return String(Math.round(n * 100) / 100); }
   function winValue() {  // what the form currently says
-    var u = $("f-win-u").value === "h" ? "h" : "d", n = num($("f-win-n").value);
+    var u = $("f-win-u").value;
+    if (u === "all") return { n: 0, u: "all" };
+    u = u === "h" ? "h" : "d";
+    var n = num($("f-win-n").value);
     return { n: n || (u === "h" ? 24 : 7), u: u };
   }
-  function winHours(w) { return w.u === "h" ? w.n : w.n * 24; }
+  function winHours(w) { return w.u === "all" ? 0 : w.u === "h" ? w.n : w.n * 24; }  // 0 = any age
   function renderWinQuick() {
     var w = winValue();
     $("f-win-quick").innerHTML = WIN_QUICK.map(function (q) {
-      var on = q[1] === w.u && num(q[0]) === w.n;
-      return '<button type="button" data-win="' + q[0] + q[1] + '"' + (on ? ' class="on"' : "") + ">" + q[0] + q[1] + "</button>";
+      var on = q[1] === w.u && (w.u === "all" || num(q[0]) === w.n);
+      return '<button type="button" data-n="' + q[0] + '" data-u="' + q[1] + '"' + (on ? ' class="on"' : "") + ">" + q[2] + "</button>";
     }).join("");
   }
   function renderWindow() {
     var w = winValue(), h = winHours(w);
-    $("f-win-sum").textContent = w.u === "h" ? "(" + trimNum(w.n) + " h)" : "(" + trimNum(w.n) + (w.n === 1 ? " day)" : " days)");
-    $("f-win-note").hidden = !(h < 24);
+    $("f-win-sum").textContent = w.u === "all" ? "(any age)" : w.u === "h" ? "(" + trimNum(w.n) + " h)" : "(" + trimNum(w.n) + (w.n === 1 ? " day)" : " days)");
+    $("f-win-n").disabled = w.u === "all";
+    $("f-win-note").hidden = !(h && h < 24);
     renderWinQuick();
   }
   function saveWindow() {
@@ -1631,7 +1674,8 @@
     try {
       var oldDays = store.get("f.days", "");  // runs made before the hours window existed
       $("f-win-n").value = store.get("f.win.n", oldDays || "7");
-      $("f-win-u").value = store.get("f.win.u", "d") === "h" ? "h" : "d";
+      var u = store.get("f.win.u", "d");
+      $("f-win-u").value = u === "h" || u === "all" ? u : "d";
       $("f-undated").checked = store.get("f.undated", "") === "1";
     } catch (e) {}
     renderWindow();
@@ -1641,9 +1685,9 @@
   });
   $("f-undated").addEventListener("change", saveWindow);
   $("f-win-quick").addEventListener("click", function (e) {
-    var b = e.target.closest("button[data-win]"); if (!b) return;
-    var v = b.dataset.win;
-    $("f-win-n").value = v.slice(0, -1); $("f-win-u").value = v.slice(-1);
+    var b = e.target.closest("button[data-u]"); if (!b) return;
+    if (b.dataset.n) $("f-win-n").value = b.dataset.n;  // "All" keeps the number for later
+    $("f-win-u").value = b.dataset.u;
     saveWindow();
   });
 
@@ -1700,14 +1744,14 @@
     var countries = wPicked().concat($("f-more").value.split(",").map(function (x) { return x.trim(); }).filter(Boolean));
     var extra = $("f-extra").value.trim() + ($("f-remote").checked ? "" : " --no-remote");
     var w = winValue(), hours = winHours(w), picked = platPicked();
-    // jobhunt.yml inputs: days always (job_bot's own window), hours only when the window is in hours
-    // (it wins over days there), allow_undated only with it, platforms empty = all.
+    // jobhunt.yml inputs: days always (job_bot's own window; 0 = any age), hours only when the
+    // window is in hours (it wins over days there), allow_undated only with it, platforms empty = all.
     var inputs = { role: role, experience: $("f-exp").value.trim(), countries: countries.join(","),
-                   days: String(Math.max(1, Math.ceil(hours / 24))),
+                   days: hours ? String(Math.max(1, Math.ceil(hours / 24))) : "0",
                    fit: $("f-fit").value, extra: extra.trim(), platforms: picked.join(",") };
     // hours wins over days in the workflow, so it is sent for any window under a day -
     // including one typed in days ("0.5 days"), where the undated switch applies too.
-    if (hours < 24) { inputs.hours = trimNum(hours); inputs.allow_undated = $("f-undated").checked ? "true" : "false"; }
+    if (hours && hours < 24) { inputs.hours = trimNum(hours); inputs.allow_undated = $("f-undated").checked ? "true" : "false"; }
     $("btn-run").disabled = true; msg("run-msg", "Starting…");
     gh("/actions/workflows/jobhunt.yml/dispatches", { method: "POST", body: JSON.stringify({ ref: s.ref, inputs: inputs }) })
       .then(function () { msg("run-msg", "Started. 5–15 minutes; the report lands under Jobs (and Home).", "ok"); setTimeout(function () { loadRuns("jobhunt.yml", "runs"); }, 4000); })

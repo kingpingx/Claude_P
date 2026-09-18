@@ -43,8 +43,10 @@ class Wellfound(Source):
                 if ctx.relevance(j.title, j.snippet) <= 0:
                     continue
                 seen.add(j.id)
-                if ctx.fresh(j.posted):
-                    out.append(j)
+                ok, why = ctx.fresh_job(j)
+                if not ok and why == "old":
+                    continue
+                out.append(j)
         return out
 
     def _parse(self, html, country, slug):
@@ -77,7 +79,9 @@ class Wellfound(Source):
                 country=country,
                 location=normalize_ws(", ".join(locs) if locs else ""),
                 remote=bool(v.get("remote")) if v.get("remote") is not None else None,
-                posted=None,  # liveStartAt is the original post date; listings stay live for years
+                # liveStartAt (epoch seconds) is when the listing went live. Listings stay up for
+                # years, so this is what keeps a 2-year-old posting out of a "last week" search.
+                posted_raw=str(v["liveStartAt"]) if v.get("liveStartAt") else "",
                 salary=normalize_ws(comp),
                 snippet=desc[:400],
                 description=desc,
