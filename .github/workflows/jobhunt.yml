@@ -1,11 +1,23 @@
 name: Job Hunt (phone)
 
 # Started from the phone page (site/index.html), the GitHub mobile app, or
-# `gh workflow run jobhunt.yml -f role="python developer"`.
-# Runs the job-hunt bot on a GitHub runner and publishes the encrypted report
-# to the gh-pages branch, where the phone page lists it.
+# `gh workflow run jobhunt.yml -f role="python developer"` - and on its own
+# every 6 hours. Runs the job-hunt bot on a GitHub runner and publishes the
+# encrypted report to the gh-pages branch, where the phone page lists it.
+#
+# The scheduled search reads repository variables (Settings -> Secrets and
+# variables -> Actions -> Variables, or `gh variable set NAME`):
+#   JOBHUNT_ROLE        "senior software engineer, .net developer"  (required)
+#   JOBHUNT_EXPERIENCE  "4"
+#   JOBHUNT_COUNTRIES   "IN,DE,NL,ES,FI,AU,JP,TH"
+#   JOBHUNT_DAYS        "1" - a day, not 6 hours, so a late run misses nothing
+#                       and boards with no posting time (Instahyre...) still show
+#   JOBHUNT_PLATFORMS   empty = every platform that is set up
+# Without JOBHUNT_ROLE the scheduled run stops at once with a clear error.
 
 on:
+  schedule:
+    - cron: "17 */6 * * *"   # 00:17, 06:17, 12:17, 18:17 UTC
   workflow_dispatch:
     inputs:
       role:
@@ -72,14 +84,15 @@ jobs:
 
       - name: Search and publish
         env:
-          INPUT_ROLE: ${{ inputs.role }}
-          INPUT_EXPERIENCE: ${{ inputs.experience }}
-          INPUT_COUNTRIES: ${{ inputs.countries }}
-          INPUT_DAYS: ${{ inputs.days }}
+          # a scheduled run has no inputs: it takes the JOBHUNT_* variables instead
+          INPUT_ROLE: ${{ github.event_name == 'schedule' && vars.JOBHUNT_ROLE || inputs.role }}
+          INPUT_EXPERIENCE: ${{ github.event_name == 'schedule' && vars.JOBHUNT_EXPERIENCE || inputs.experience }}
+          INPUT_COUNTRIES: ${{ github.event_name == 'schedule' && vars.JOBHUNT_COUNTRIES || inputs.countries }}
+          INPUT_DAYS: ${{ github.event_name == 'schedule' && (vars.JOBHUNT_DAYS || '1') || inputs.days }}
           INPUT_HOURS: ${{ inputs.hours }}
           INPUT_ALLOW_UNDATED: ${{ inputs.allow_undated }}
-          INPUT_PLATFORMS: ${{ inputs.platforms }}
-          INPUT_FIT: ${{ inputs.fit }}
+          INPUT_PLATFORMS: ${{ github.event_name == 'schedule' && vars.JOBHUNT_PLATFORMS || inputs.platforms }}
+          INPUT_FIT: ${{ inputs.fit || 'default' }}
           INPUT_EXTRA: ${{ inputs.extra }}
           RESUME_TEXT: ${{ secrets.RESUME_TEXT }}
           SITE_PASSPHRASE: ${{ secrets.SITE_PASSPHRASE }}

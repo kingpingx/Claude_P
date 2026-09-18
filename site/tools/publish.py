@@ -20,6 +20,8 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 SITE_DIR = os.path.dirname(HERE)
 KEEP = {"jobhunt": 40, "careers": 30, "naukri": 40, "interview": 20}
+# Job lists older than this are deleted on every publish (interview pages are kept).
+MAX_AGE_DAYS = {"jobhunt": 7, "careers": 7, "naukri": 7}
 
 
 def slug(s):
@@ -93,8 +95,23 @@ def publish_report(a):
     for old in same[KEEP.get(a.kind, 30):]:
         idx["items"].remove(old)
         _remove_files(a.pages, old)
+    prune_old(a.pages, idx, now)
     save_index(a.pages, idx)
     print('publish: %s (%d bytes) as "%s"' % (rel, len(raw), a.title))
+
+
+def prune_old(pages, idx, now):
+    """Delete job lists older than MAX_AGE_DAYS, whatever their kind's KEEP count allows."""
+    for item in list(idx["items"]):
+        days = MAX_AGE_DAYS.get(item.get("kind"))
+        try:
+            when = dt.datetime.strptime(item.get("when", ""), "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=dt.timezone.utc)
+        except ValueError:
+            continue
+        if days and now - when > dt.timedelta(days=days):
+            idx["items"].remove(item)
+            _remove_files(pages, item)
+            print("publish: removed %s report from %s (older than %d days)" % (item["kind"], item["when"][:10], days))
 
 
 def publish_site(a):
