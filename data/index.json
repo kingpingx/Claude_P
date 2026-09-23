@@ -1,6 +1,25 @@
 {
- "updated": "2026-09-23T11:41:24Z",
+ "updated": "2026-09-23T17:03:34Z",
  "items": [
+  {
+   "id": "jobhunt-20260923-170334-senior-software-engineer-net-developer",
+   "kind": "jobhunt",
+   "title": "senior software engineer, .net developer",
+   "when": "2026-09-23T17:03:34Z",
+   "file": "data/jobhunt/jobhunt-20260923-170334-senior-software-engineer-net-developer.enc",
+   "bytes": 1134949,
+   "meta": {
+    "jobs": "648",
+    "countries": "IN,DE,NL,ES,FI,AU,JP,TH",
+    "experience": "4",
+    "days": "1",
+    "hours": "",
+    "window_hours": "24",
+    "platforms_asked": "",
+    "platforms": "linkedin,seek,xing,arbeitnow,duunitori,tecnoempleo,infojobs,wellfound,tokyodev,japandev,daijob,wantedly,jobthai,themuse,landingjobs,relocateme,instahyre,remotive,remoteok,jobicy,workingnomads",
+    "jobs_file": "data/jobhunt/jobhunt-20260923-170334-senior-software-engineer-net-developer.jobs.enc"
+   }
+  },
   {
    "id": "jobhunt-20260923-114123-senior-software-engineer-net-developer",
    "kind": "jobhunt",
