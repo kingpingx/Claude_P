@@ -1,6 +1,25 @@
 {
- "updated": "2026-11-02T15:58:20Z",
+ "updated": "2026-11-03T01:01:15Z",
  "items": [
+  {
+   "id": "jobhunt-20261103-010115-senior-software-engineer-net-developer",
+   "kind": "jobhunt",
+   "title": "senior software engineer, .net developer",
+   "when": "2026-11-03T01:01:15Z",
+   "file": "data/jobhunt/jobhunt-20261103-010115-senior-software-engineer-net-developer.enc",
+   "bytes": 1349266,
+   "meta": {
+    "jobs": "725",
+    "countries": "IN,DE,NL,ES,FI,AU,JP,TH",
+    "experience": "4",
+    "days": "1",
+    "hours": "",
+    "window_hours": "24",
+    "platforms_asked": "",
+    "platforms": "linkedin,seek,xing,arbeitnow,duunitori,tecnoempleo,infojobs,wellfound,tokyodev,japandev,daijob,wantedly,jobthai,themuse,landingjobs,relocateme,instahyre,remotive,remoteok,jobicy,workingnomads",
+    "jobs_file": "data/jobhunt/jobhunt-20261103-010115-senior-software-engineer-net-developer.jobs.enc"
+   }
+  },
   {
    "id": "jobhunt-20261102-155820-senior-software-engineer-net-developer",
    "kind": "jobhunt",
@@ -398,25 +417,6 @@
     "platforms_asked": "",
     "platforms": "linkedin,seek,xing,arbeitnow,duunitori,tecnoempleo,infojobs,wellfound,tokyodev,japandev,daijob,wantedly,jobthai,themuse,landingjobs,relocateme,instahyre,remotive,remoteok,jobicy,workingnomads",
     "jobs_file": "data/jobhunt/jobhunt-20261027-051004-senior-software-engineer-net-developer.jobs.enc"
-   }
-  },
-  {
-   "id": "jobhunt-20261026-224333-senior-software-engineer-net-developer",
-   "kind": "jobhunt",
-   "title": "senior software engineer, .net developer",
-   "when": "2026-10-26T22:43:33Z",
-   "file": "data/jobhunt/jobhunt-20261026-224333-senior-software-engineer-net-developer.enc",
-   "bytes": 1427719,
-   "meta": {
-    "jobs": "755",
-    "countries": "IN,DE,NL,ES,FI,AU,JP,TH",
-    "experience": "4",
-    "days": "1",
-    "hours": "",
-    "window_hours": "24",
-    "platforms_asked": "",
-    "platforms": "linkedin,seek,xing,arbeitnow,duunitori,tecnoempleo,infojobs,wellfound,tokyodev,japandev,daijob,wantedly,jobthai,themuse,landingjobs,relocateme,instahyre,remotive,remoteok,jobicy,workingnomads",
-    "jobs_file": "data/jobhunt/jobhunt-20261026-224333-senior-software-engineer-net-developer.jobs.enc"
    }
   }
  ]
